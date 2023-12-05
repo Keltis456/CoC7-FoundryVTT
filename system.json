@@ -136,6 +136,11 @@
       "lang": "ru",
       "name": "Русский",
       "path": "lang/ru.json"
+    },
+    {
+      "lang": "ua",
+      "name": "Українська",
+      "path": "lang/ua.json"
     }
   ],
   "socket": true,
@@ -143,7 +148,7 @@
   "gridUnits": "ft",
   "primaryTokenAttribute": "attribs.hp",
   "secondaryTokenAttribute": "attribs.san",
-  "url": "https://github.com/Miskatonic-Investigative-Society/CoC7-FoundryVTT",
-  "manifest": "https://github.com/Miskatonic-Investigative-Society/CoC7-FoundryVTT/releases/latest/download/system.json",
-  "download": "https://github.com/Miskatonic-Investigative-Society/CoC7-FoundryVTT/releases/download/0.10.8/system.zip"
+  "url": "https://github.com/Keltis456/CoC7-FoundryVTT",
+  "manifest": "https://github.com/Keltis456/CoC7-FoundryVTT/releases/latest/download/system.json",
+  "download": "https://github.com/Keltis456/CoC7-FoundryVTT/releases/download/0.10.8/system.zip"
 }
