@@ -1,4 +1,4 @@
-/* global AudioHelper, CONFIG, game, mergeObject */
+/* global AudioHelper, CONFIG, foundry, game */
 import { CoC7Check } from '../../check.js'
 import { CoC7Dice } from '../../dice.js'
 import { RollCard } from './roll-card.js'
@@ -24,7 +24,7 @@ export class CombinedCheckCard extends RollCard {
   }
 
   static get defaultConfig () {
-    return mergeObject(super.defaultConfig, {
+    return foundry.utils.mergeObject(super.defaultConfig, {
       template: 'systems/CoC7/templates/chat/cards/combined-roll.html',
       type: 'combinedCard',
       title: 'CoC7.CombinedRollCard'
@@ -192,7 +192,7 @@ export class CombinedCheckCard extends RollCard {
     if (!this._roll) return
 
     this.rolls = this.rolls.filter(roll => {
-      return typeof roll.actor.data !== 'undefined' // remove any actors that no longer exist
+      return typeof roll.actor.system !== 'undefined' // remove any actors that no longer exist
     })
 
     for (const r of this.rolls) {

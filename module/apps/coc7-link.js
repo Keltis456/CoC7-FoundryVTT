@@ -1,7 +1,8 @@
-/* global canvas, ChatMessage, CONFIG, CONST, duplicate, game, mergeObject, ui */
+/* global $, canvas, ChatMessage, CONFIG, CONST, foundry, game, ui */
 import { CoCActor } from '../actors/actor.js'
 import { CoC7Check } from '../check.js'
 import { CoC7ContentLinkDialog } from './coc7-content-link-dialog.js'
+import { CoC7GroupMessage } from './coc7-group-message.js'
 import { CoC7Utilities } from '../utilities.js'
 import { SanCheckCard } from '../chat/cards/san-check.js'
 import { chatHelper, isCtrlKey } from '../chat/helper.js'
@@ -26,8 +27,9 @@ import { chatHelper, isCtrlKey } from '../chat/helper.js'
  *   name: name of the skill/characteristic.
  *   [difficulty]: ? (blind), 0 (regular), + (hard), ++ (extreme), +++ (critical).
  *   [modifier]: -x (x penalty dice), +x (x bonus dice), 0 (no modifier).
- *   [icon]: icon tu use (font awsome).
+ *   [icon]: icon to use (font awsome).
  *   [blind]: will trigger a blind roll.
+ *   [pushing]: will trigger a pushed roll
  *
  * [DISPLAYED_NAME: name to display.]
  *
@@ -59,20 +61,20 @@ export class CoC7Link {
     CONFIG.CoC7Link = {
       documentClass: CoC7Link
     }
-  }
+    const body = $('body')
+    body.on('click', 'a.coc7-link', CoC7Link._onLinkClick)
+    body.on('dragstart', 'a.coc7-link', event => CoC7Link._onDragCoC7Link(event))
 
-  static bindEventsHandler (html) {
-    html
-      .find('a.coc7-link:not(.hascoc7linked)')
-      .on('click', event => CoC7Link._onLinkClick(event))
-      .on('dragstart', event => CoC7Link._onDragCoC7Link(event))
-      .addClass('hascoc7linked')
+    CONFIG.TextEditor.enrichers.push({
+      pattern: new RegExp('@(coc7)\\.' + '(check|effect|item|sanloss)' + '\\[([^\\[\\]]*(?:\\[[^\\[\\]]*(?:\\[[^\\[\\]]*\\])*[^\\[\\]]*\\])*[^\\[\\]]*)\\]' + '(?:{([^}]+)})?', 'gi'),
+      enricher: CoC7Link._createLink
+    })
   }
 
   static _linkFromEvent (event) {
     const a = event.currentTarget
     const i = a.querySelector('[data-link-icon]')
-    const data = duplicate(a.dataset)
+    const data = foundry.utils.duplicate(a.dataset)
 
     const oldType = data.type
 
@@ -123,7 +125,7 @@ export class CoC7Link {
    */
   static async fromDropData (data, options = {}) {
     const cls = new CoC7Link()
-    cls.object = mergeObject({
+    cls.object = foundry.utils.mergeObject({
       type: 'CoC7Link',
       check: CoC7Link.CHECK_TYPE.CHECK,
       linkType: CoC7Link.LINK_TYPE.SKILL,
@@ -171,9 +173,17 @@ export class CoC7Link {
         if (key === 'icon') {
           data.icon = value
         }
-        if (key === 'blind' && typeof value === 'undefined') {
-          value = true
-          data.blind = true && [CoC7Link.CHECK_TYPE.CHECK].includes(type.toLowerCase())
+        if (typeof value === 'undefined') {
+          if (key === 'blind') {
+            value = true
+            data.blind = true && [CoC7Link.CHECK_TYPE.CHECK].includes(type.toLowerCase())
+          } else if (key === 'pushing') {
+            value = true
+            data.pushing = true && [CoC7Link.CHECK_TYPE.CHECK].includes(type.toLowerCase())
+          } else if (key === 'combat') {
+            value = true
+            data.combat = true && [CoC7Link.CHECK_TYPE.CHECK].includes(type.toLowerCase())
+          }
         }
         data.dataset[key] = value
       }
@@ -201,7 +211,7 @@ export class CoC7Link {
           humanName = CoC7Utilities.getCharacteristicNames(data.dataset.name)?.label
         }
         title = game.i18n.format(
-          `CoC7.LinkCheck${!data.dataset.difficulty ? '' : 'Diff'}${!data.dataset.modifier ? '' : 'Modif'}`,
+          `CoC7.LinkCheck${!data.dataset.difficulty ? '' : 'Diff'}${!data.dataset.modifier ? '' : 'Modif'}${data.pushing ? 'Pushing' : ''}`,
           {
             difficulty,
             modifier: data.dataset.modifier,
@@ -289,10 +299,18 @@ export class CoC7Link {
         // @coc7.check[blind,type:characteristic,name:str,difficulty:1,modifier:0,icon:fa fa-link]{Strength}
         // @coc7.check[blind,type:attribute,name:lck,difficulty:1,modifier:0,icon:fa fa-link]{Luck}
         // @coc7.check[blind,type:skill,name:Law,difficulty:1,modifier:0,icon:fa fa-link]{Law}
-        if (!eventData.linkType || !eventData.name) {
+        if (!eventData.linkType || (!eventData.name && !eventData.rolls)) {
           return ''
         }
-        let options = `${eventData.blind ? 'blind,' : ''}type:${eventData.linkType},name:${eventData.name}`
+        let options = `${eventData.blind ? 'blind,' : ''}${eventData.pushing ? 'pushing,' : ''}type:${eventData.linkType}`
+        if (eventData.name) {
+          options += `,name:${eventData.name}`
+        } else if (eventData.rolls) {
+          options += `,rolls:${eventData.rolls}`
+          if (eventData.combat) {
+            options += ',combat'
+          }
+        }
         if (typeof eventData.difficulty !== 'undefined' && eventData.difficulty !== CoC7Check.difficultyLevel.regular) {
           options += `,difficulty:${eventData.difficulty}`
         }
@@ -419,6 +437,13 @@ export class CoC7Link {
         if (['attributes', 'attribute', 'attrib', 'attribs'].includes(options.linkType.toLowerCase())) {
           return actor.attributeCheck(options.name, shiftKey, options)
         }
+        if (['combinedall', 'combinedany', 'opposed'].includes(options.linkType.toLowerCase())) {
+          return CoC7GroupMessage.createGroupMessage({
+            type: options.linkType.toLowerCase(),
+            rollRequisites: options.rolls.split('&&'),
+            isCombat: Boolean(options.combat ?? false)
+          })
+        }
         break
 
       case CoC7Link.CHECK_TYPE.SANLOSS:
@@ -512,9 +537,14 @@ export class CoC7Link {
       const speaker = ChatMessage.getSpeaker()
       let actor = ChatMessage.getSpeakerActor(speaker)
       if (!actor) {
-        const actors = game.actors.filter(a => (a.ownership[game.user.id] ?? a.ownership.default) >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER)
+        const actors = game.actors.filter(a => (a.ownership[game.user.id] ?? a.ownership.default) === CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER)
         if (actors.length === 1) {
           actor = actors[0]
+        } else {
+          const actors = game.actors.filter(a => (a.ownership[game.user.id] ?? a.ownership.default) === CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER)
+          if (actors.length === 1) {
+            actor = actors[0]
+          }
         }
       }
       if (actor) {
@@ -619,5 +649,9 @@ export class CoC7Link {
 
   get isBlind () {
     return this.isCheck && this.object.blind
+  }
+
+  get isPushing () {
+    return this.isCheck && this.object.pushing
   }
 }

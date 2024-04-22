@@ -1,4 +1,4 @@
-/* global ChatMessage, Dialog, game, mergeObject, Roll, renderTemplate, ui */
+/* global ChatMessage, Dialog, foundry, game, Roll, renderTemplate, ui */
 import { CoC7Utilities } from '../../utilities.js'
 import { CoC7Item } from '../item.js'
 import { SanCheckCard } from '../../chat/cards/san-check.js'
@@ -17,7 +17,7 @@ export class CoC7Spell extends CoC7Item {
       /** This is not owned by any Actor */
       return ui.notifications.error(game.i18n.localize('CoC7.NotOwned'))
     }
-    const costs = this.system.costs
+    const costs = foundry.utils.duplicate(this.system.costs)
     const losses = []
     let convertSurplusIntoHitPoints
     costs.magicPoints = CoC7Utilities.isFormula(costs.magicPoints)
@@ -161,7 +161,7 @@ export class CoC7Spell extends CoC7Item {
       }
       for (let i = 0, im = book.system.spells.length; i < im; i++) {
         if (book.system.spells[i]._id === this.id) {
-          book.system.spells[i] = mergeObject(book.system.spells[i], data)
+          book.system.spells[i] = foundry.utils.mergeObject(book.system.spells[i], data)
           // spellData = book.system.spells[i]
         }
       }
