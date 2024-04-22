@@ -1,4 +1,4 @@
-/* global canvas, CONST, FormApplication, game, mergeObject, ui */
+/* global canvas, CONST, FormApplication, foundry, game, ui */
 import { CoCActor } from '../actors/actor.js'
 import { CoC7Check } from '../check.js'
 import { CoC7Link } from './coc7-link.js'
@@ -6,7 +6,7 @@ import { CoC7Utilities } from '../utilities.js'
 
 export class CoC7ContentLinkDialog extends FormApplication {
   static get defaultOptions () {
-    return mergeObject(super.defaultOptions, {
+    return foundry.utils.mergeObject(super.defaultOptions, {
       id: 'link-creation',
       classes: ['coc7', 'active-effect-sheet'],
       title: game.i18n.localize('CoC7.CreateLink'),
@@ -163,6 +163,7 @@ export class CoC7ContentLinkDialog extends FormApplication {
           this.object.link.setValue('name', formData.checkName)
           break
         case 'blind':
+        case 'pushing':
         case 'difficulty':
         case 'displayName':
         case 'icon':
@@ -311,8 +312,10 @@ export class CoC7ContentLinkDialog extends FormApplication {
     } else if (link.id !== '') {
       this.object.hasID = 'fromDirectory'
     }
-    if (link.difficulty !== CoC7Check.difficultyLevel.regular || parseInt(link.modifier, 10) !== 0) {
+    if (link.difficulty !== CoC7Check.difficultyLevel.regular || parseInt(link.modifier, 10) !== 0 || link.isPushing) {
       this.object.hasModifiers = true
+    } else {
+      this.object.hasModifiers = false
     }
     if (link.displayName !== '') {
       this.object.hasLabel = true
@@ -324,7 +327,7 @@ export class CoC7ContentLinkDialog extends FormApplication {
   }
 
   static async create (linkData = {}, option = {}) {
-    const object = mergeObject({
+    const object = foundry.utils.mergeObject({
       link: null,
       hasID: '',
       hasModifiers: false,

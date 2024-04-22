@@ -1,4 +1,4 @@
-/* global $, Actor, AudioHelper, ChatMessage, CONFIG, CONST, duplicate, foundry, fromUuid, game, getComputedStyle, Item, mergeObject, renderTemplate, Token, ui */
+/* global $, Actor, AudioHelper, ChatMessage, CONFIG, CONST, foundry, fromUuid, game, getComputedStyle, Item, renderTemplate, Token, ui */
 import { CoC7Dice } from './dice.js'
 import { CoC7Item } from './items/item.js'
 import { chatHelper, CoC7Roll } from './chat/helper.js'
@@ -153,6 +153,9 @@ export class CoC7Check {
   }
 
   get rawValueString () {
+    if (this._rawValue === 0) {
+      return '0'
+    }
     if (!this._rawValue) return undefined
     if (
       this.flatThresholdModifier &&
@@ -466,7 +469,7 @@ export class CoC7Check {
 
   get successLevelIcons () {
     if (this.unknownDifficulty) return null
-    if (this.isSimpleRoll) return null
+    if (this.isSimpleRoll && this._rawValue !== 0) return null
     if (this.successLevel >= this.difficulty) {
       const icons = []
       for (
@@ -838,6 +841,41 @@ export class CoC7Check {
       }
       // if( die.value == 100) die.value = "00";
       this.dices.tens.push(die)
+    }
+    this.computeCheck()
+  }
+
+  async increaseLuckSpend (luckAmount) {
+    const spendingAmount = parseInt(luckAmount, 10)
+    this.totalLuckSpent = parseInt(this.totalLuckSpent ?? 0, 10) + spendingAmount
+    const modifiedResult = Math.max(1, this.modifiedResult - this.totalLuckSpent)
+    if (modifiedResult === 1) {
+      this.successLevel = CoC7Check.successLevel.critical
+    } else if (modifiedResult <= this.extremeThreshold) {
+      this.successLevel = CoC7Check.successLevel.extreme
+    } else if (modifiedResult <= this.hardThreshold) {
+      this.successLevel = CoC7Check.successLevel.hard
+    } else if (modifiedResult <= this.rawValue) {
+      this.successLevel = CoC7Check.successLevel.regular
+    } else if (this.fumbleThreshold <= modifiedResult) {
+      this.successLevel = CoC7Check.successLevel.fumble
+    } else if (modifiedResult > this.rawValue) {
+      this.successLevel = CoC7Check.successLevel.failure
+    }
+    if (this.difficulty <= this.successLevel) {
+      this.isSuccess = true
+      this.isFailure = false
+    }
+    this.luckSpent = true
+    let remove = 0
+    for (let index = 0, maxIndex = this.increaseSuccess.length; index < maxIndex; index++) {
+      this.increaseSuccess[index].luckToSpend = this.increaseSuccess[index].luckToSpend - spendingAmount
+      if (this.increaseSuccess[index].luckToSpend < 1) {
+        remove++
+      }
+    }
+    for (let index = 0; index < remove; index++) {
+      this.increaseSuccess.shift()
     }
     this.computeCheck()
   }
@@ -1551,7 +1589,7 @@ export class CoC7Check {
 
   async getHtmlRollElement (options = {}) {
     const template = 'systems/CoC7/templates/chat/rolls/in-card-roll.html'
-    if (this.options) this.options = mergeObject(this.options, options)
+    if (this.options) this.options = foundry.utils.mergeObject(this.options, options)
     else this.options = options
     const html = await renderTemplate(template, this)
     if (html) return $.parseHTML(html)[0]
@@ -1560,7 +1598,7 @@ export class CoC7Check {
 
   async getHtmlRoll (options = {}) {
     const template = 'systems/CoC7/templates/chat/rolls/in-card-roll.html'
-    if (this.options) this.options = mergeObject(this.options, options)
+    if (this.options) this.options = foundry.utils.mergeObject(this.options, options)
     else this.options = options
     const html = await renderTemplate(template, this)
     return html || undefined
@@ -1615,7 +1653,7 @@ export class CoC7Check {
           }
         }
         if (typeof chatData.speaker !== 'undefined') {
-          chatData.flags.CoC7.originalSpeaker = duplicate(chatData.speaker)
+          chatData.flags.CoC7.originalSpeaker = foundry.utils.duplicate(chatData.speaker)
         }
         if (game.user.isGM) {
           switch (game.settings.get('CoC7', 'selfRollWhisperTarget')) {
